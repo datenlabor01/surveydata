@@ -1,0 +1,130 @@
+from dash import Dash, html, dcc, Input, Output, State
+import pandas as pd
+import plotly.express as px
+import dash_bootstrap_components as dbc
+
+app = Dash(external_stylesheets = [dbc.themes.LUX])
+
+df_main = pd.read_csv("/home/BMZDatalab/LS/afrobarometer8.csv")
+df7 = pd.read_csv("/home/BMZDatalab/LS/afrobarometer7.csv")
+
+uniques = df_main.iloc[:,5:].columns
+uniques = uniques.append(df7.iloc[:,5:].columns)
+
+#Dropdown for indicator:
+indicator_dropdown = dcc.Dropdown(options=uniques,
+                             value='All', style={"textAlign": "center"}, clearable=False, multi=False, placeholder='Frage auswählen (Default: Best country model for development')
+
+#Dropdown for dimension:
+cat_dropdown = dcc.Dropdown(options=["Region", "Gender", "Age"],
+                             value='All', style={"textAlign": "center"}, clearable=False, multi=False, placeholder='Kategorie auswählen (Default: Region)')
+
+country_dropdown = dcc.Dropdown(options=sorted(df_main.Country.unique()),
+                             value='All', style={"textAlign": "center"}, clearable=False, multi=False, placeholder='Land auswählen (Default: Tunesien)')
+
+
+text2 = "Diese Anwendung wird als Prototyp vom BMZ Datenlabor angeboten. Sie kann Fehler enthalten und ist als alleinige Entscheidungsgrundlage nicht geeignet. Außerdem können Prototypen ausfallen oder kurzfristig von uns verändert werden. Sichern Sie daher wichtige Ergebnisse per Screenshot oder Export. Die Anwendung ist vorerst intern und sollte daher nicht ohne Freigabe geteilt werden. Wenden Sie sich bei Fragen gerne an datenlabor@bmz.bund.de"
+
+app.layout = dbc.Container([
+      dbc.Row([
+         html.Div(html.Img(src="https://github.com/datenlabor01/LS/raw/main/logo.png", style={'height':'80%', 'width':'20%'})),
+         html.H1(children='Prototyp Länderüberblick'),
+         html.P(children = "Das ist ein Prototyp, der Fehler enthalten kann. Es stellt die Umfrage des Afrobarometers von 2022 (Round 8) dar, für die Fragen 69, 70, 76 von 2019 (Round 7). Informationen zu den Daten gibt es unter https://www.afrobarometer.org/data/merged-data/.")],
+         style={'textAlign': 'center'}),
+
+      dbc.Row([
+         dbc.Button(children = "Über diese App", id = "textbutton", color = "light", className = "me-1",
+                    n_clicks=0, style={'textAlign': 'center', "width": "30rem"})
+      ], justify = "center"),
+      dbc.Row([
+            dbc.Collapse(dbc.Card(dbc.CardBody([
+               dbc.Badge(text2, className="text-wrap"),
+               ])), id="collapse", style={'textAlign': 'center', "width": "60rem"}, is_open=False),
+      ], justify = "center"),
+
+      dbc.Row([
+        dbc.Col([html.Br(), indicator_dropdown], width = 8),
+      ], justify = "center"),
+
+      dbc.Row([
+         dcc.Graph(id='histo', style={'textAlign': 'center'}),
+      ]),
+
+      dbc.Row([
+        dbc.Col([country_dropdown, html.Br(), cat_dropdown], width = 8),
+      ],justify = "center"),
+
+      dbc.Row([
+         dbc.Col([dcc.Graph(id='hist_chart', style={'textAlign': 'center'})]),
+      ]),
+
+])
+
+#Button to display text:
+@app.callback(
+    Output("collapse", "is_open"),
+    [Input("textbutton", "n_clicks")],
+    [State("collapse", "is_open")],
+)
+
+def collapse(n, is_open):
+   if n:
+      return not is_open
+   return is_open
+
+
+@app.callback(
+    Output('histo', 'figure'),
+    Input(indicator_dropdown, 'value')
+)
+
+def update_map(selected_indicator):
+
+   if (selected_indicator == "All") | (selected_indicator == None):
+      selected_indicator = "Q69a. Best country model for development"
+
+   if (selected_indicator == "Q69. Most likely country for emigration") | (selected_indicator == "Q70. Most important reason for emigrating") | (selected_indicator == "Q76. Climate change needs to be stopped? By ordinary people?"):
+       df_hist = df7
+   else:
+       df_hist = df_main
+
+   figHist = px.histogram(df_hist, x='Country', color = selected_indicator, barnorm ="percent")
+   figHist.update_layout(yaxis_visible=False, xaxis_title=None)
+
+   return figHist
+
+@app.callback(
+    Output('hist_chart', 'figure'),
+    [Input(country_dropdown, 'value'), Input(cat_dropdown, 'value'),
+     Input(indicator_dropdown, 'value')]
+)
+
+def update_figures(selected_country, selected_category, selected_indicator):
+
+   if (selected_indicator == "Q69. Most likely country for emigration") | (selected_indicator == "Q70. Most important reason for emigrating") | (selected_indicator == "Q76. Climate change needs to be stopped? By ordinary people?"):
+       df_hist = df7
+   else:
+       df_hist = df_main
+
+   if ("All" == selected_country) | (selected_country == None):
+      dat_fil = df_hist[df_hist["Country"] == "Tunisia"]
+   else:
+      dat_fil = df_hist[df_hist["Country"] == selected_country]
+
+   if (selected_indicator == "All") | (selected_indicator == None):
+      indicator = "Q69a. Best country model for development"
+   else:
+       indicator = selected_indicator
+
+   if (selected_category == "All") | (selected_category == None):
+      category = "Region"
+   else:
+       category = selected_category
+
+   figHistCountry = px.histogram(dat_fil, x= category, color = indicator)
+   figHistCountry.update_layout(yaxis_visible=False)
+
+   return figHistCountry
+
+if __name__ == '__main__':
+    app.run_server(debug=True)
